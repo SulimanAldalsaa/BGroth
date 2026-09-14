@@ -1,8 +1,11 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+load_dotenv(BASE_DIR / ".env")
 
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
@@ -26,8 +29,6 @@ INSTALLED_APPS = [
     "drf_spectacular",
 
     "accounts",
-    "business",
-
 ]
 
 MIDDLEWARE = [
@@ -66,7 +67,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "BGroth",      
         "USER": "postgres",          
-        "PASSWORD": "3650681",
+        "PASSWORD": "3",
         "HOST": "localhost",
         "PORT": "5432",
     }
@@ -92,9 +93,20 @@ STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+# EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
-DEFAULT_FROM_EMAIL = "MyApp <no-reply@myapp.com>"
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", 587))
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD")
+
+
+
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "MyApp <anasyaghi99@gmail.com>")
+
+# DEFAULT_FROM_EMAIL = "MyApp <no-reply@myapp.com>"
 
 FRONTEND_RESET_PASSWORD_URL = os.environ.get(
     "FRONTEND_RESET_PASSWORD_URL", "https://your-app-domain.com/reset-password"

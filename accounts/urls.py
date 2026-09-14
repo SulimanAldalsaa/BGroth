@@ -10,6 +10,7 @@ from .views import (
     PasswordResetRequestView,
     RegisterView,
 )
+# PasswordResetRequestView
 
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="auth-register"),
