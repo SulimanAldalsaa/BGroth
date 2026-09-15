@@ -27,8 +27,10 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
-
+    
+    'corsheaders',
     "accounts",
+    "business",
 ]
 
 MIDDLEWARE = [
@@ -67,7 +69,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": "BGroth",      
         "USER": "postgres",          
-        "PASSWORD": "3",
+        "PASSWORD": "3650681",
         "HOST": "localhost",
         "PORT": "5432",
     }

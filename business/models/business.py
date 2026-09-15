@@ -2,7 +2,12 @@ from django.conf import settings
 from django.db import models
 
 
+
 class Business(models.Model):
+
+    class Meta:
+        app_label = 'business'
+        
     owner = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -16,3 +21,5 @@ class Business(models.Model):
 
     def __str__(self):
         return self.name
+
+    
