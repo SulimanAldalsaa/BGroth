@@ -8,32 +8,42 @@ from business.models import Product, StockMovement
 from business.serializers.product import ProductSerializer
 from business.services.product_service import create_product
 from business.services.stock_service import adjust_stock
-
+from business.utils import get_user_business
 
 class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        business = get_user_business(self.request.user)
         return Product.objects.filter(
-            business=self.request.user.business
+            business=business
         )
 
-    def perform_create(self, serializer):
-        create_product(
-            business=self.request.user.business,
-            user=self.request.user,
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        business = get_user_business(request.user)
+
+        product = create_product(
+            business=business,
+            user=request.user,
             validated_data=serializer.validated_data.copy(),
         )
 
+        output = ProductSerializer(product, context={"request": request})
+        return Response(output.data, status=status.HTTP_201_CREATED)
 
+    
 class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        business = get_user_business(self.request.user)
         return Product.objects.filter(
-            business=self.request.user.business
+            business=business
         )
 
 
@@ -58,7 +68,7 @@ class ProductStockAdjustView(APIView):
         try:
             product = adjust_stock(
                 product_id=pk,
-                business=request.user.business,
+                business=get_user_business(request.user),
                 user=request.user,
                 quantity=int(quantity),
                 movement_type=movement_type,
@@ -85,8 +95,9 @@ class LowStockProductListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        business = get_user_business(self.request.user)
         return Product.objects.filter(
-            business=self.request.user.business,
+            business=business,
             quantity__lte=models.F("minimum_stock"),
         )
 
@@ -96,7 +107,8 @@ class OutOfStockProductListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        business = get_user_business(self.request.user)
         return Product.objects.filter(
-            business=self.request.user.business,
+            business=business,
             quantity=0,
         )

@@ -46,35 +46,31 @@ urlpatterns = [
     ),
 
     path(
-        "products/",
-        ProductListCreateView.as_view(),
-        name="product-list-create",
-    ),
-
-    path(
-        "products/<int:pk>/",
-        ProductDetailView.as_view(),
-        name="product-detail",
-    ),
-
-    path(
-        "products/<int:pk>/adjust-stock/",
-        ProductStockAdjustView.as_view(),
-        name="product-adjust-stock",
-    ),
+        "products/", 
+         ProductListCreateView.as_view(),
+        name="product-list-create"
+        ),
 
     path(
         "products/low-stock/",
-        LowStockProductListView.as_view(),
-        name="product-low-stock",
-    ),
-
+          LowStockProductListView.as_view(),
+         name="product-low-stock"
+        ),
     path(
-        "products/out-of-stock/",
+        "products/out-of-stock/", 
         OutOfStockProductListView.as_view(),
-        name="product-out-of-stock",
-    ),
-
+        name="product-out-of-stock"
+        ),
+    path(
+        "products/<int:pk>/",
+          ProductDetailView.as_view(),
+         name="product-detail"
+         ),
+    path(
+        "products/<int:pk>/adjust-stock/",
+          ProductStockAdjustView.as_view(),
+         name="product-adjust-stock"
+         ),
     path(
         "customers/",
         CustomerListCreateView.as_view(),

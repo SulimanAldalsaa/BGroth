@@ -9,4 +9,5 @@ from .sale import (
     SaleItemCreateSerializer,
     SaleItemResponseSerializer,
     SaleResponseSerializer,
+    SaleUpdateSerializer,
 )

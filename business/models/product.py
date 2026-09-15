@@ -30,7 +30,9 @@ class Product(models.Model):
         max_digits=12,
         decimal_places=2,
         validators=[MinValueValidator(0)],
-    )
+        null=True,
+        blank=True,
+)
 
     quantity = models.PositiveIntegerField(default=0)
 

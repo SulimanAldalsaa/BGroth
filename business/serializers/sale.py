@@ -64,3 +64,26 @@ class SaleResponseSerializer(serializers.ModelSerializer):
             "sold_at",
             "items",
         ]
+
+class SaleUpdateSerializer(serializers.Serializer):
+    customer = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+    )
+    paid_amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0,
+        required=False,
+    )
+    items = SaleItemCreateSerializer(
+        many=True,
+        required=False,
+    )
+
+    def validate_items(self, value):
+        if value is not None and len(value) == 0:
+            raise serializers.ValidationError(
+                "At least one item is required when updating items."
+            )
+        return value        

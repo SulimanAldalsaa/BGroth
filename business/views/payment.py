@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from business.serializers.payment import PaymentSerializer
 from business.services.payment_service import add_payment
-
+from business.utils import get_user_business
 
 class PaymentCreateView(APIView):
     permission_classes = [IsAuthenticated]
