@@ -26,7 +26,7 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(
-            business=self.request.user.business
+            business=get_user_business(self.request.user)
         )
 
 

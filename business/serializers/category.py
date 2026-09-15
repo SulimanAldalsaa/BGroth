@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from business.models import Category
-
+from business.utils import get_user_business
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,7 +22,7 @@ class CategorySerializer(serializers.ModelSerializer):
     def validate_name(self, value):
         request = self.context["request"]
 
-        business = request.user.business
+        business = get_user_business(request.user)
 
         queryset = Category.objects.filter(
             business=business,

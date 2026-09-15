@@ -20,7 +20,7 @@ class PaymentCreateView(APIView):
         try:
             payment = add_payment(
                 sale_id=sale_id,
-                business=request.user.business,
+                business=get_user_business(request.user),
                 amount=serializer.validated_data["amount"],
                 payment_method=serializer.validated_data[
                     "payment_method"

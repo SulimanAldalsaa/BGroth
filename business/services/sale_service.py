@@ -147,33 +147,35 @@ def update_sale(
     if sale is None:
         raise ValueError("Sale not found.")
 
-    # 1) إرجاع الكميات القديمة للمخزون
-    for old_item in sale.items.all():
-        product = Product.objects.select_for_update().get(
-            id=old_item.product_id,
-            business=business,
-        )
-        previous_quantity = product.quantity
-        new_quantity = previous_quantity + old_item.quantity
-
-        product.quantity = new_quantity
-        product.save(update_fields=["quantity", "updated_at"])
-
-        StockMovement.objects.create(
-            product=product,
-            movement_type=StockMovement.MovementType.IN,
-            quantity=old_item.quantity,
-            previous_quantity=previous_quantity,
-            new_quantity=new_quantity,
-            reason=f"Sale #{sale.id} update - restore stock",
-            created_by=user,
-        )
-
-    # 2) حذف الـ SaleItems القديمة
-    sale.items.all().delete()
-
-    # 3) تطبيق العناصر الجديدة (إن وُجدت)
+    # =========================================================
+    # تعديل المنتجات — يتنفذ فقط لو بعت items في الـ request
+    # =========================================================
     if items is not None:
+
+        # 1) إرجاع الكميات القديمة للمخزون
+        for old_item in sale.items.all():
+            product = Product.objects.select_for_update().get(
+                id=old_item.product_id,
+                business=business,
+            )
+            previous_quantity = product.quantity
+            new_quantity = previous_quantity + old_item.quantity
+
+            product.quantity = new_quantity
+            product.save(update_fields=["quantity", "updated_at"])
+
+            StockMovement.objects.create(
+                product=product,
+                movement_type=StockMovement.MovementType.IN,
+                quantity=old_item.quantity,
+                previous_quantity=previous_quantity,
+                new_quantity=new_quantity,
+                reason=f"Sale #{sale.id} update - restore stock",
+                created_by=user,
+            )
+
+        sale.items.all().delete()
+
         total_amount = Decimal("0")
         prepared_items = []
 
@@ -234,7 +236,9 @@ def update_sale(
 
         sale.total_amount = total_amount
 
-    # 4) تحديث العميل (اختياري)
+    # =========================================================
+    # تحديث العميل — مستقل عن items
+    # =========================================================
     if customer_id is not None:
         if customer_id:
             customer = Customer.objects.filter(
@@ -247,7 +251,9 @@ def update_sale(
         else:
             sale.customer = None
 
-    # 5) تحديث المدفوع + حالة الدفع
+    # =========================================================
+    # تحديث المدفوع — مستقل عن items
+    # =========================================================
     if paid_amount is not None:
         paid_amount = Decimal(paid_amount)
 
@@ -267,7 +273,6 @@ def update_sale(
 
     sale.save()
     return sale
-
 
 @transaction.atomic
 def delete_sale(
@@ -308,6 +313,5 @@ def delete_sale(
             created_by=user,
         )
 
-    # حذف الـ Payments المرتبطة ثم الـ Sale (و الـ Items بالـ CASCADE)
     sale.payments.all().delete()
     sale.delete()

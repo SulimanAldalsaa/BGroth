@@ -12,7 +12,7 @@ from business.services.sale_service import (
     update_sale,
     delete_sale,
 )
-from business.utils import get_user_business   # لو عملت الـ helper
+from business.utils import get_user_business   
 
 
 class SaleListCreateView(generics.ListCreateAPIView):

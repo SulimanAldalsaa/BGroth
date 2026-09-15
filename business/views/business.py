@@ -30,7 +30,7 @@ class BusinessView(APIView):
         )
 
         serializer.is_valid(raise_exception=True)
-        business = serializer.save()
+        business = serializer.save(owner=request.user)
 
         return Response(
             BusinessSerializer(business).data,
