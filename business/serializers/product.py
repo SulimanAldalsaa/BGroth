@@ -1,51 +1,45 @@
 from rest_framework import serializers
 
-from business.models import Product
+from business.models import Category, Product
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    initial_quantity = serializers.IntegerField(
+        required=False,
+        min_value=0,
+        write_only=True,
+    )
+
     class Meta:
         model = Product
         fields = [
             "id",
+            "category",
             "name",
             "description",
             "selling_price",
             "cost_price",
             "quantity",
             "minimum_stock",
+            "image",
+            "initial_quantity",
             "created_at",
             "updated_at",
         ]
 
         read_only_fields = [
             "id",
+            "quantity",
             "created_at",
             "updated_at",
         ]
 
-    def validate(self, attrs):
-        selling_price = attrs.get(
-            "selling_price",
-            getattr(self.instance, "selling_price", None),
-        )
+    def validate_category(self, category):
+        request = self.context["request"]
 
-        cost_price = attrs.get(
-            "cost_price",
-            getattr(self.instance, "cost_price", None),
-        )
-
-        if (
-            selling_price is not None
-            and cost_price is not None
-            and selling_price < cost_price
-        ):
+        if category and category.business.owner != request.user:
             raise serializers.ValidationError(
-                {
-                    "selling_price": (
-                        "Selling price cannot be lower than cost price."
-                    )
-                }
+                "Invalid category."
             )
 
-        return attrs
+        return category

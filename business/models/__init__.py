@@ -1,14 +1,20 @@
 from .business import Business
-from .product import Product
+from .category import Category
 from .customer import Customer
-from .sale import Sale, SaleItem
 from .expense import Expense
+from .payment import Payment
+from .product import Product
+from .sale import Sale, SaleItem
+from .stock_movement import StockMovement
 
 __all__ = [
     "Business",
-    "Product",
+    "Category",
     "Customer",
+    "Expense",
+    "Payment",
+    "Product",
     "Sale",
     "SaleItem",
-    "Expense",
+    "StockMovement",
 ]

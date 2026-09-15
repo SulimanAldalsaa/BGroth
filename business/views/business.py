@@ -1,83 +1,48 @@
-from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from business.serializers import (
+from business.serializers.business import (
     BusinessCreateSerializer,
     BusinessSerializer,
 )
-from business.services.business_service import (
-    BusinessService,
-)
 
 
-class BusinessView(generics.GenericAPIView):
+class BusinessView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        business = getattr(
-            request.user,
-            "business",
-            None,
-        )
+        business = getattr(request.user, "business", None)
 
-        if business is None:
+        if not business:
             return Response(
-                {
-                    "detail": (
-                        "Business has not been created."
-                    )
-                },
+                {"detail": "Business not found."},
                 status=404,
             )
 
-        serializer = BusinessSerializer(
-            business
-        )
-
+        serializer = BusinessSerializer(business)
         return Response(serializer.data)
 
     def post(self, request):
         serializer = BusinessCreateSerializer(
-            data=request.data
+            data=request.data,
+            context={"request": request},
         )
 
-        serializer.is_valid(
-            raise_exception=True
-        )
-
-        business = BusinessService.create_business(
-            owner=request.user,
-            name=serializer.validated_data["name"],
-            description=serializer.validated_data.get(
-                "description",
-                "",
-            ),
-        )
-
-        response_serializer = BusinessSerializer(
-            business
-        )
+        serializer.is_valid(raise_exception=True)
+        business = serializer.save()
 
         return Response(
-            response_serializer.data,
+            BusinessSerializer(business).data,
             status=201,
         )
 
     def patch(self, request):
-        business = getattr(
-            request.user,
-            "business",
-            None,
-        )
+        business = getattr(request.user, "business", None)
 
-        if business is None:
+        if not business:
             return Response(
-                {
-                    "detail": (
-                        "Business has not been created."
-                    )
-                },
+                {"detail": "Business not found."},
                 status=404,
             )
 
@@ -87,12 +52,7 @@ class BusinessView(generics.GenericAPIView):
             partial=True,
         )
 
-        serializer.is_valid(
-            raise_exception=True
-        )
-
+        serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        return Response(
-            serializer.data
-        )
+        return Response(serializer.data)

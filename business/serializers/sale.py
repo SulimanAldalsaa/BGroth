@@ -1,9 +1,9 @@
 from rest_framework import serializers
 
-from business.models import Sale
+from business.models import Sale, SaleItem
 
 
-class SaleItemInputSerializer(serializers.Serializer):
+class SaleItemCreateSerializer(serializers.Serializer):
     product = serializers.IntegerField()
     quantity = serializers.IntegerField(min_value=1)
 
@@ -18,31 +18,34 @@ class SaleCreateSerializer(serializers.Serializer):
         max_digits=12,
         decimal_places=2,
         min_value=0,
+        default=0,
     )
 
-    items = SaleItemInputSerializer(
-        many=True,
-        allow_empty=False,
-    )
+    items = SaleItemCreateSerializer(many=True)
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "At least one item is required."
+            )
+
+        return value
 
 
-class SaleItemResponseSerializer(serializers.Serializer):
-    product = serializers.IntegerField()
-    product_name = serializers.CharField()
-    quantity = serializers.IntegerField()
-    unit_price = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-    )
-    subtotal = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-    )
+class SaleItemResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SaleItem
+        fields = [
+            "id",
+            "product",
+            "quantity",
+            "unit_price",
+            "subtotal",
+        ]
 
 
 class SaleResponseSerializer(serializers.ModelSerializer):
-    items = serializers.SerializerMethodField()
-
+    items = SaleItemResponseSerializer(many=True, read_only=True)
     remaining_amount = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -57,36 +60,7 @@ class SaleResponseSerializer(serializers.ModelSerializer):
             "total_amount",
             "paid_amount",
             "remaining_amount",
+            "payment_status",
+            "sold_at",
             "items",
-            "created_at",
-        ]
-
-    def get_items(self, obj):
-        return [
-            {
-                "product": item.product.id,
-                "product_name": item.product.name,
-                "quantity": item.quantity,
-                "unit_price": item.unit_price,
-                "subtotal": item.subtotal,
-            }
-            for item in obj.items.all()
-        ]
-
-    remaining_amount = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        read_only=True,
-    )
-
-    class Meta:
-        model = Sale
-        fields = [
-            "id",
-            "customer",
-            "total_amount",
-            "paid_amount",
-            "remaining_amount",
-            "items",
-            "created_at",
         ]

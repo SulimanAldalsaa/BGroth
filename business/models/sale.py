@@ -1,10 +1,13 @@
-from decimal import Decimal
-
-from django.core.validators import MinValueValidator
 from django.db import models
 
 
 class Sale(models.Model):
+
+    class PaymentStatus(models.TextChoices):
+        PAID = "PAID", "Paid"
+        PARTIAL = "PARTIAL", "Partial"
+        UNPAID = "UNPAID", "Unpaid"
+
     business = models.ForeignKey(
         "business.Business",
         on_delete=models.CASCADE,
@@ -22,25 +25,28 @@ class Sale(models.Model):
     total_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=Decimal("0.00"),
-        validators=[MinValueValidator(0)],
     )
 
     paid_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=Decimal("0.00"),
-        validators=[MinValueValidator(0)],
+        default=0,
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PaymentStatus.choices,
+        default=PaymentStatus.UNPAID,
+    )
 
-    def __str__(self):
-        return f"Sale #{self.id}"
+    sold_at = models.DateTimeField(auto_now_add=True)
 
     @property
     def remaining_amount(self):
         return self.total_amount - self.paid_amount
+
+    def __str__(self):
+        return f"Sale #{self.pk}"
 
 
 class SaleItem(models.Model):
@@ -61,14 +67,12 @@ class SaleItem(models.Model):
     unit_price = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
     )
 
     subtotal = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        validators=[MinValueValidator(0)],
     )
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        return f"{self.product.name} - {self.quantity}"

@@ -9,6 +9,14 @@ class Product(models.Model):
         related_name="products",
     )
 
+    category = models.ForeignKey(
+        "business.Category",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products",
+    )
+
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
 
@@ -27,6 +35,8 @@ class Product(models.Model):
     quantity = models.PositiveIntegerField(default=0)
 
     minimum_stock = models.PositiveIntegerField(default=0)
+
+    image = models.CharField(max_length=500, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

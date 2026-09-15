@@ -1,19 +1,22 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from business.serializers import (
+from business.models import Sale
+from business.serializers.sale import (
     SaleCreateSerializer,
     SaleResponseSerializer,
 )
-from business.selectors.sale_selectors import (
-    get_business_sales,
-)
-from business.services.sale_service import SaleService
+from business.services.sale_service import create_sale
 
 
 class SaleListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Sale.objects.filter(
+            business=self.request.user.business
+        ).prefetch_related("items")
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -21,36 +24,42 @@ class SaleListCreateView(generics.ListCreateAPIView):
 
         return SaleResponseSerializer
 
-    def get_queryset(self):
-        return get_business_sales(
-            self.request.user.business
-        )
-
     def create(self, request, *args, **kwargs):
         serializer = SaleCreateSerializer(
             data=request.data
         )
 
-        serializer.is_valid(
-            raise_exception=True
-        )
+        serializer.is_valid(raise_exception=True)
 
-        sale = SaleService.create_sale(
-            business=request.user.business,
-            customer_id=serializer.validated_data.get(
-                "customer"
-            ),
-            paid_amount=serializer.validated_data[
-                "paid_amount"
-            ],
-            items=serializer.validated_data["items"],
-        )
-
-        response_serializer = SaleResponseSerializer(
-            sale
-        )
+        try:
+            sale = create_sale(
+                business=request.user.business,
+                user=request.user,
+                customer_id=serializer.validated_data.get(
+                    "customer"
+                ),
+                paid_amount=serializer.validated_data[
+                    "paid_amount"
+                ],
+                items=serializer.validated_data["items"],
+            )
+        except ValueError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response(
-            response_serializer.data,
-            status=201,
+            SaleResponseSerializer(sale).data,
+            status=status.HTTP_201_CREATED,
         )
+
+
+class SaleDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SaleResponseSerializer
+
+    def get_queryset(self):
+        return Sale.objects.filter(
+            business=self.request.user.business
+        ).prefetch_related("items")

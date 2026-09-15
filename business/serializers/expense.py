@@ -11,10 +11,9 @@ class ExpenseSerializer(serializers.ModelSerializer):
             "amount",
             "category",
             "description",
-            "date",
+            "expense_date",
             "created_at",
         ]
-
         read_only_fields = [
             "id",
             "created_at",

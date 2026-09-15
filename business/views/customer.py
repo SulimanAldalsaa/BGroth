@@ -1,8 +1,9 @@
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 
-from business.models import Customer
-from business.serializers import CustomerSerializer
+from business.models import Customer, Sale
+from business.serializers.customer import CustomerSerializer
+from business.serializers.sale import SaleResponseSerializer
 
 
 class CustomerListCreateView(generics.ListCreateAPIView):
@@ -12,7 +13,7 @@ class CustomerListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return Customer.objects.filter(
             business=self.request.user.business
-        ).order_by("-created_at")
+        )
 
     def perform_create(self, serializer):
         serializer.save(
@@ -28,3 +29,14 @@ class CustomerDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Customer.objects.filter(
             business=self.request.user.business
         )
+
+
+class CustomerHistoryView(generics.ListAPIView):
+    serializer_class = SaleResponseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Sale.objects.filter(
+            business=self.request.user.business,
+            customer_id=self.kwargs["pk"],
+        ).prefetch_related("items")

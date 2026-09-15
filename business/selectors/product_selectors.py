@@ -1,14 +1,23 @@
+from django.db import models
+
 from business.models import Product
 
 
 def get_business_products(business):
     return Product.objects.filter(
         business=business
-    ).order_by("-created_at")
+    ).select_related("category")
 
 
-def get_business_product(business, product_id):
+def get_low_stock_products(business):
     return Product.objects.filter(
         business=business,
-        id=product_id,
-    ).first()
+        quantity__lte=models.F("minimum_stock"),
+    )
+
+
+def get_out_of_stock_products(business):
+    return Product.objects.filter(
+        business=business,
+        quantity=0,
+    )
