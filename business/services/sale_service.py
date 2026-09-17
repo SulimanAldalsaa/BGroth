@@ -147,12 +147,10 @@ def update_sale(
     if sale is None:
         raise ValueError("Sale not found.")
 
-    # =========================================================
-    # تعديل المنتجات — يتنفذ فقط لو بعت items في الـ request
-    # =========================================================
+   
     if items is not None:
 
-        # 1) إرجاع الكميات القديمة للمخزون
+       
         for old_item in sale.items.all():
             product = Product.objects.select_for_update().get(
                 id=old_item.product_id,
@@ -236,9 +234,7 @@ def update_sale(
 
         sale.total_amount = total_amount
 
-    # =========================================================
-    # تحديث العميل — مستقل عن items
-    # =========================================================
+   
     if customer_id is not None:
         if customer_id:
             customer = Customer.objects.filter(
@@ -251,9 +247,7 @@ def update_sale(
         else:
             sale.customer = None
 
-    # =========================================================
-    # تحديث المدفوع — مستقل عن items
-    # =========================================================
+    
     if paid_amount is not None:
         paid_amount = Decimal(paid_amount)
 
@@ -291,7 +285,7 @@ def delete_sale(
     if sale is None:
         raise ValueError("Sale not found.")
 
-    # إرجاع الكميات للمخزون
+  
     for item in sale.items.all():
         product = Product.objects.select_for_update().get(
             id=item.product_id,
