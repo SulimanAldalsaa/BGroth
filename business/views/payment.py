@@ -3,10 +3,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from drf_spectacular.utils import extend_schema
+
+from business.models import Payment
 from business.serializers.payment import PaymentSerializer
 from business.services.payment_service import add_payment
 from business.utils import get_user_business
 
+@extend_schema(request=PaymentSerializer, responses={201: PaymentSerializer})
 class PaymentCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -22,9 +26,10 @@ class PaymentCreateView(APIView):
                 sale_id=sale_id,
                 business=get_user_business(request.user),
                 amount=serializer.validated_data["amount"],
-                payment_method=serializer.validated_data[
-                    "payment_method"
-                ],
+                payment_method=serializer.validated_data.get(
+                    "payment_method",
+                    Payment.PaymentMethod.CASH,
+                ),
                 note=serializer.validated_data.get(
                     "note",
                     "",

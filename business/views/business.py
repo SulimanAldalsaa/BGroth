@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,6 +9,11 @@ from business.serializers.business import (
 )
 
 
+@extend_schema_view(
+    get=extend_schema(responses={200: BusinessSerializer}),
+    post=extend_schema(request=BusinessCreateSerializer, responses={201: BusinessSerializer}),
+    patch=extend_schema(request=BusinessSerializer, responses={200: BusinessSerializer}),
+)
 class BusinessView(APIView):
     permission_classes = [IsAuthenticated]
 

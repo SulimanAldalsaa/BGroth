@@ -258,12 +258,17 @@ def update_sale(
 
         sale.paid_amount = paid_amount
 
-        if paid_amount == sale.total_amount:
-            sale.payment_status = Sale.PaymentStatus.PAID
-        elif paid_amount > 0:
-            sale.payment_status = Sale.PaymentStatus.PARTIAL
-        else:
-            sale.payment_status = Sale.PaymentStatus.UNPAID
+    if sale.paid_amount > sale.total_amount:
+        raise ValueError(
+            "Paid amount cannot exceed total amount."
+        )
+
+    if sale.paid_amount == sale.total_amount:
+        sale.payment_status = Sale.PaymentStatus.PAID
+    elif sale.paid_amount > 0:
+        sale.payment_status = Sale.PaymentStatus.PARTIAL
+    else:
+        sale.payment_status = Sale.PaymentStatus.UNPAID
 
     sale.save()
     return sale

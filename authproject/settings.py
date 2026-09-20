@@ -67,11 +67,11 @@ WSGI_APPLICATION = "authproject.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "BGroth",      
-        "USER": "postgres",          
-        "PASSWORD": "3650681",
-        "HOST": "localhost",
-        "PORT": "5432",
+        "NAME": os.environ.get("DB_NAME", "BGroth"),
+        "USER": os.environ.get("DB_USER", "postgres"),
+        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
+        "HOST": os.environ.get("DB_HOST", "localhost"),
+        "PORT": os.environ.get("DB_PORT", "5432"),
     }
 }
 
@@ -139,8 +139,8 @@ SIMPLE_JWT = {
 
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "Auth API",
-    "DESCRIPTION": "Authentication endpoints: register, login, logout, forgot password.",
+    "TITLE": "BGroth API",
+    "DESCRIPTION": "BGroth backend: authentication, business profile, products/inventory, customers, sales, payments, expenses and dashboard.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SWAGGER_UI_SETTINGS": {

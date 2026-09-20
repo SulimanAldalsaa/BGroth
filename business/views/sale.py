@@ -73,6 +73,7 @@ class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
         return SaleResponseSerializer
 
     def update(self, request, *args, **kwargs):
+        self.get_object()  # 404 for sales of other businesses
         partial = kwargs.pop("partial", False)
         serializer = SaleUpdateSerializer(
             data=request.data,
@@ -100,6 +101,7 @@ class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Response(SaleResponseSerializer(sale).data)
 
     def destroy(self, request, *args, **kwargs):
+        self.get_object()  # 404 for sales of other businesses
         business = get_user_business(request.user)
 
         try:

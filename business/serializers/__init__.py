@@ -4,6 +4,7 @@ from .customer import CustomerSerializer
 from .expense import ExpenseSerializer
 from .payment import PaymentSerializer
 from .product import ProductSerializer
+from .stock import StockAdjustSerializer
 from .sale import (
     SaleCreateSerializer,
     SaleItemCreateSerializer,

@@ -1,4 +1,6 @@
 from django.db import models
+from django.db.models import ProtectedError
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -6,6 +8,7 @@ from rest_framework.views import APIView
 
 from business.models import Product, StockMovement
 from business.serializers.product import ProductSerializer
+from business.serializers.stock import StockAdjustSerializer
 from business.services.product_service import create_product
 from business.services.stock_service import adjust_stock
 from business.utils import get_user_business
@@ -46,33 +49,33 @@ class ProductDetailView(generics.RetrieveUpdateDestroyAPIView):
             business=business
         )
 
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {"detail": "This product has sales and cannot be deleted."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
+
+@extend_schema(request=StockAdjustSerializer, responses={200: ProductSerializer})
 class ProductStockAdjustView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, pk):
-        quantity = request.data.get("quantity")
-        movement_type = request.data.get("movement_type")
-        reason = request.data.get("reason", "")
-
-        if quantity is None or movement_type is None:
-            return Response(
-                {
-                    "detail": (
-                        "quantity and movement_type are required."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer = StockAdjustSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
 
         try:
             product = adjust_stock(
                 product_id=pk,
                 business=get_user_business(request.user),
                 user=request.user,
-                quantity=int(quantity),
-                movement_type=movement_type,
-                reason=reason,
+                quantity=data["quantity"],
+                movement_type=data["movement_type"],
+                reason=data["reason"],
             )
         except ValueError as exc:
             return Response(
