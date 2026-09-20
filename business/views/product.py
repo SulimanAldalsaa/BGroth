@@ -2,10 +2,12 @@ from django.db import models
 from django.db.models import ProtectedError
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
+from rest_framework.filters import SearchFilter
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from business.filters import StableOrderingFilter
 from business.models import Product, StockMovement
 from business.serializers.product import ProductSerializer
 from business.serializers.stock import StockAdjustSerializer
@@ -16,6 +18,10 @@ from business.utils import get_user_business
 class ProductListCreateView(generics.ListCreateAPIView):
     serializer_class = ProductSerializer
     permission_classes = [IsAuthenticated]
+    filter_backends = [SearchFilter, StableOrderingFilter]
+    search_fields = ["name"]
+    ordering_fields = ["name", "selling_price", "quantity", "created_at"]
+    ordering = ["name"]
 
     def get_queryset(self):
         business = get_user_business(self.request.user)

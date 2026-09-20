@@ -68,3 +68,43 @@ class ProductTests(BusinessAPITestCase):
         response = self.client_a.delete(API + f"products/{sold['id']}/")
         self.assertEqual(response.status_code, 400)
         self.assertIn("detail", response.json())
+
+
+class ProductSearchAndOrderingTests(BusinessAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.cola = self.make_product(name="Cola Zero", selling_price="3.00", initial_quantity=5)
+        self.chips = self.make_product(name="Chips", selling_price="1.50", initial_quantity=50)
+        self.water = self.make_product(name="Cola Water", selling_price="1.00", initial_quantity=20)
+
+    def names(self, query="", client=None):
+        response = (client or self.client_a).get(API + "products/" + query)
+        self.assertEqual(response.status_code, 200, response.content)
+        return [p["name"] for p in response.json()]
+
+    def test_default_order_is_by_name(self):
+        self.assertEqual(self.names(), ["Chips", "Cola Water", "Cola Zero"])
+
+    def test_search_by_name_is_case_insensitive_and_partial(self):
+        self.assertEqual(self.names("?search=cola"), ["Cola Water", "Cola Zero"])
+        self.assertEqual(self.names("?search=CHIP"), ["Chips"])
+        self.assertEqual(self.names("?search=zzz"), [])
+
+    def test_ordering(self):
+        self.assertEqual(self.names("?ordering=selling_price"), ["Cola Water", "Chips", "Cola Zero"])
+        self.assertEqual(self.names("?ordering=-quantity"), ["Chips", "Cola Water", "Cola Zero"])
+        self.assertEqual(self.names("?ordering=-name"), ["Cola Zero", "Cola Water", "Chips"])
+
+    def test_search_and_ordering_combine(self):
+        self.assertEqual(self.names("?search=cola&ordering=-selling_price"), ["Cola Zero", "Cola Water"])
+
+    def test_search_and_ordering_stay_inside_the_business(self):
+        self.assertEqual(self.names("?search=cola", client=self.client_b), [])
+        self.make_product(client=self.client_b, name="Cola B", selling_price="9.00")
+        self.assertEqual(self.names("?search=cola", client=self.client_b), ["Cola B"])
+        self.assertEqual(self.names("?ordering=-selling_price", client=self.client_b), ["Cola B"])
+        self.assertEqual(self.names("?search=cola"), ["Cola Water", "Cola Zero"])
+
+    def test_low_stock_lists_are_unaffected(self):
+        low = self.client_a.get(API + "products/low-stock/").json()
+        self.assertEqual(low, [])

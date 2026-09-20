@@ -134,7 +134,6 @@ def update_sale(
     business,
     user,
     customer_id=None,
-    paid_amount=None,
     items=None,
 ):
     sale = (
@@ -149,8 +148,11 @@ def update_sale(
 
    
     if items is not None:
+        historical_prices = {
+            old_item.product_id: old_item.unit_price
+            for old_item in sale.items.all()
+        }
 
-       
         for old_item in sale.items.all():
             product = Product.objects.select_for_update().get(
                 id=old_item.product_id,
@@ -193,7 +195,12 @@ def update_sale(
                     f"Insufficient stock for {product.name}."
                 )
 
-            unit_price = product.selling_price
+            # Products already on the sale keep the price they were sold at;
+            # only newly added products use the current selling price.
+            unit_price = historical_prices.get(
+                product.id,
+                product.selling_price,
+            )
             subtotal = unit_price * quantity
             total_amount += subtotal
 
@@ -246,17 +253,6 @@ def update_sale(
             sale.customer = customer
         else:
             sale.customer = None
-
-    
-    if paid_amount is not None:
-        paid_amount = Decimal(paid_amount)
-
-        if paid_amount > sale.total_amount:
-            raise ValueError(
-                "Paid amount cannot exceed total amount."
-            )
-
-        sale.paid_amount = paid_amount
 
     if sale.paid_amount > sale.total_amount:
         raise ValueError(

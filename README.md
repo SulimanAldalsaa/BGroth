@@ -86,8 +86,8 @@ Route prefixes: `/api/auth/`, `/api/business/`.
 
 ## API modules
 
-Authentication · Business · Dashboard · Categories · Products (+ stock) · Customers · Sales · Payments ·
-Expenses. Every endpoint, request and response is documented in [`docs/API.md`](docs/API.md).
+Authentication · Business · Dashboard (today / week / month) · Categories · Products (+ stock) · Customers (+ balance
+summary) · Sales · Payments · Expenses. Every endpoint, request and response is documented in [`docs/API.md`](docs/API.md).
 
 ## Local setup
 
@@ -144,7 +144,9 @@ Errors are **not** in one uniform shape. A client must handle:
 | HTML (not JSON) | Django error page | unhandled server errors (500) while `DEBUG=True` |
 
 Numbers: money is a JSON **string** (`"2.50"`); IDs are integers except `User.id` (UUID); datetimes are
-ISO-8601 UTC. List endpoints return plain arrays (no pagination envelope).
+ISO-8601 UTC. List endpoints return plain arrays; sales and expenses return a paginated envelope only when
+`page` or `page_size` is sent. Search, ordering and date filters are in
+[`docs/API.md`](docs/API.md#list-query-parameters).
 
 ## Testing
 
@@ -152,8 +154,9 @@ ISO-8601 UTC. List endpoints return plain arrays (no pagination envelope).
 python manage.py test
 ```
 
-33 tests: authentication flow, business, categories, products / stock, customers, sales, payments,
-expenses, dashboard and cross-user data isolation. They need PostgreSQL access (Django creates and
+119 tests: authentication flow, business, categories, products / stock / search / ordering, customers and their balance
+summary, sales (payments, historical prices, date filters, ordering, pagination), expenses, dashboard periods,
+the OpenAPI schema and cross-user data isolation. They need PostgreSQL access (Django creates and
 drops a `test_<DB_NAME>` database).
 
 ## Security notes
@@ -175,10 +178,9 @@ and pin dependency versions. These are currently hard-coded in `authproject/sett
 ## Known limitations / missing features
 
 Not implemented (do not build UI against them yet): invoices/PDF, notifications/alerts, backup/restore,
-weekly/monthly reports and charts, debts owed *to suppliers*, debt due dates, user-profile update,
-phone/email verification (OTP), date filters on sales/expenses, search, pagination.
-Remaining known issues (editing `paid_amount` on a sale creates no payment record, sale edits re-price at the
-current product price, no payments list) are in [`docs/GAP_REPORT.md`](docs/GAP_REPORT.md).
+chart data and full reports, debts owed *to suppliers*, debt due dates, user-profile update,
+phone/email verification (OTP), a `payment_status` filter, a payments list.
+Remaining issues are listed in [`docs/GAP_REPORT.md`](docs/GAP_REPORT.md).
 
 ## License
 

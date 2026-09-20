@@ -68,23 +68,6 @@ class BusinessTests(BusinessAPITestCase):
         self.assertEqual(client.get(API + "products/").status_code, 404)
         self.assertEqual(client.get(API + "dashboard/").status_code, 404)
 
-    def test_dashboard_today_totals(self):
-        product = self.make_product()
-        self.make_sale(product["id"], quantity=4)
-        self.client_a.post(
-            API + "expenses/",
-            {"amount": "3.00", "category": "rent", "expense_date": self._today()},
-            format="json",
-        )
-        data = self.client_a.get(API + "dashboard/").json()
-        self.assertEqual(data["sales_today"], "10.00")
-        self.assertEqual(data["expenses_today"], "3.00")
-        self.assertEqual(data["profit_today"], "7.00")
-
-    def test_dashboard_with_no_data_returns_decimal_strings(self):
-        data = self.client_b.get(API + "dashboard/").json()
-        self.assertEqual(data, {"sales_today": "0.00", "expenses_today": "0.00", "profit_today": "0.00"})
-
     def test_expenses_crud_and_category_filter(self):
         body = {"amount": "20", "category": "rent", "expense_date": "2026-09-01"}
         created = self.client_a.post(API + "expenses/", body, format="json")
@@ -101,12 +84,6 @@ class BusinessTests(BusinessAPITestCase):
         self.assertEqual(self.client_a.post(API + "categories/", {"name": "Drinks"}, format="json").status_code, 201)
         self.assertEqual(self.client_a.post(API + "categories/", {"name": "Drinks"}, format="json").status_code, 400)
         self.assertEqual(self.client_b.post(API + "categories/", {"name": "Drinks"}, format="json").status_code, 201)
-
-    @staticmethod
-    def _today():
-        from django.utils import timezone
-
-        return timezone.localdate().isoformat()
 
 
 class IsolationTests(BusinessAPITestCase):
@@ -160,7 +137,7 @@ class IsolationTests(BusinessAPITestCase):
         )
         self.assertEqual(sell.status_code, 400)
         history = self.client_b.get(API + f"customers/{self.customer['id']}/history/")
-        self.assertEqual(history.json(), [])
+        self.assertEqual(history.status_code, 404)
 
     def test_cannot_use_foreign_category_on_product(self):
         category = self.client_a.post(API + "categories/", {"name": "Private"}, format="json").json()

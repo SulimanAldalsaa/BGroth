@@ -66,15 +66,17 @@ class SaleResponseSerializer(serializers.ModelSerializer):
         ]
 
 class SaleUpdateSerializer(serializers.Serializer):
+    # Money fields are derived from the sale items and its payments.
+    NOT_EDITABLE_FIELDS = (
+        "paid_amount",
+        "payment_status",
+        "remaining_amount",
+        "total_amount",
+    )
+
     customer = serializers.IntegerField(
         required=False,
         allow_null=True,
-    )
-    paid_amount = serializers.DecimalField(
-        max_digits=12,
-        decimal_places=2,
-        min_value=0,
-        required=False,
     )
     items = SaleItemCreateSerializer(
         many=True,
@@ -86,4 +88,19 @@ class SaleUpdateSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "At least one item is required when updating items."
             )
-        return value        
+        return value
+
+    def validate(self, attrs):
+        rejected = {
+            field: (
+                "This field cannot be edited. "
+                "Record payments with POST /api/business/sales/{id}/payments/."
+            )
+            for field in self.NOT_EDITABLE_FIELDS
+            if field in self.initial_data
+        }
+
+        if rejected:
+            raise serializers.ValidationError(rejected)
+
+        return attrs

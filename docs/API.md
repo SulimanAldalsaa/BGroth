@@ -15,8 +15,35 @@ Base URL: see the README (`http://10.0.2.2:8000/` from the emulator). All bodies
 | IDs | integers, except `User.id` which is a UUID string |
 | Money / decimals | JSON **strings** with 2 decimals, e.g. `"2.50"` (including the dashboard). Send them as strings or numbers |
 | Dates | `datetime` = ISO-8601 UTC (`2026-09-20T15:03:13.042807Z`); `expense_date` = `YYYY-MM-DD` |
-| Lists | Plain JSON array. **No pagination, no filtering (except `?category=` on expenses), no guaranteed order** |
+| Lists | Plain JSON array by default. Search, ordering, date filters and opt-in pagination are described in [List query parameters](#list-query-parameters) |
 | Business required | Every `/api/business/*` endpoint except `POST /api/business/` returns `404 {"detail": "Business not found. Please create a business first."}` until the user creates a business |
+
+### List query parameters
+
+| Endpoint | `search` | `ordering` (prefix `-` = descending) | Default order | Date filters | Pagination |
+|---|---|---|---|---|---|
+| `GET /products/` | `name` (contains, case-insensitive) | `name`, `selling_price`, `quantity`, `created_at` | `name` | – | – |
+| `GET /customers/` | `name` (contains, case-insensitive) | `name`, `created_at` | `name` | – | – |
+| `GET /sales/` | – | `sold_at`, `total_amount`, `paid_amount` | `-sold_at` | `date_from`, `date_to` | `page`, `page_size` |
+| `GET /expenses/` | – | `expense_date`, `amount`, `created_at` | `-expense_date` | `date_from`, `date_to` | `page`, `page_size` |
+
+- Parameters combine freely (for example `?category=rent&date_from=2026-09-01&ordering=-amount&page_size=10`).
+  Everything is applied to the caller's own business only.
+- **Search:** `?search=cola`. Lists that do not support `search` ignore it.
+- **Ordering:** `?ordering=-total_amount`. Ties are broken by id, so the order is stable. An unknown field is ignored and the default order is used.
+- **Dates:** `date_from` and `date_to` are `YYYY-MM-DD` and **inclusive** (`date_to=2026-09-20` includes the whole of 20 Sep).
+  Sales are compared with the date of `sold_at` in the server time zone (UTC); expenses with `expense_date`.
+  A blank value (`?date_from=`) is ignored. A malformed date, or `date_from` later than `date_to`, returns
+  `400 {"date_from": ["Date has wrong format. Use one of these formats instead: YYYY-MM-DD."]}`
+  (or `{"date_to": [...]}`).
+- **Pagination (sales and expenses only) is opt-in.** Without `page` / `page_size` the response is the plain array described
+  throughout this document. If either parameter is present the response becomes an envelope
+  (`page_size` defaults to 20, maximum 100; a page past the end returns `404 {"detail": "Invalid page."}`):
+
+```json
+{"count": 42, "next": "http://host/api/business/sales/?page=2&page_size=20", "previous": null,
+ "results": [ /* the same objects as in the plain array */ ]}
+```
 
 ### Error shapes (handle all of them)
 
@@ -115,11 +142,22 @@ Partial update of the same fields → `200` business. `PUT` is **not** supported
 
 ### GET `/api/business/dashboard/` — auth
 ```json
-{"sales_today": "2.50", "expenses_today": "0.00", "profit_today": "2.50"}
+{
+  "today": {"sales": "100.00", "expenses": "30.00", "profit": "70.00"},
+  "week":  {"sales": "700.00", "expenses": "200.00", "profit": "500.00"},
+  "month": {"sales": "2500.00", "expenses": "800.00", "profit": "1700.00"},
+  "sales_today": "100.00", "expenses_today": "30.00", "profit_today": "70.00"
+}
 ```
-- Only **today**, only these three numbers. No week/month, no chart series, no debts, no inventory/low-stock counts.
-- `profit_today = sales_today − expenses_today` (total of sale amounts, paid or not).
-- ⚠️ "Today" is computed in server time (`TIME_ZONE = UTC`), not the merchant's time zone.
+- `sales` = sum of `total_amount` of the sales in the period (paid or not); `expenses` = sum of expense `amount`;
+  `profit = sales − expenses` (can be negative). All values are decimal strings; no data gives `"0.00"`.
+- **Periods** are calendar periods, inclusive: `today`; `week` = Monday to Sunday of the current week;
+  `month` = 1st to last day of the current month. Sales use the date of `sold_at`, expenses use `expense_date`.
+  An expense dated later in the current week/month counts in that period.
+- "Today" is computed in the server time zone (`TIME_ZONE = UTC`), not the merchant's local time zone.
+- `sales_today`, `expenses_today` and `profit_today` are **deprecated** copies of `today` kept for existing clients.
+  New code should read `today.sales`, `today.expenses`, `today.profit`.
+- Still not provided: chart series, outstanding debts, inventory / low-stock counts.
 
 ---
 
@@ -147,7 +185,7 @@ Product object:
 
 | Method | Path | Notes |
 |---|---|---|
-| GET / POST | `/api/business/products/` | No search/filter/pagination (`?search=` is ignored) |
+| GET / POST | `/api/business/products/` | `?search=` (name), `?ordering=` — see [List query parameters](#list-query-parameters). No pagination |
 | GET / PUT / PATCH / DELETE | `/api/business/products/{id}/` | DELETE of a product that has been sold → `400 {"detail": "This product has sales and cannot be deleted."}` |
 | GET | `/api/business/products/low-stock/` | Products with `quantity <= minimum_stock` (includes out-of-stock) |
 | GET | `/api/business/products/out-of-stock/` | Products with `quantity == 0` |
@@ -170,12 +208,23 @@ Fields: `id`, `name` (required), `phone`, `address`, `created_at`, `updated_at`.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET / POST | `/api/business/customers/` | no search |
-| GET / PUT / PATCH / DELETE | `/api/business/customers/{id}/` | Deleting a customer keeps their sales with `customer = null` (their balance becomes ownerless) |
-| GET | `/api/business/customers/{id}/history/` | Array of **sales** (same shape as Sale, below). No totals; an unknown id returns `200 []` |
+| GET / POST | `/api/business/customers/` | `?search=` (name), `?ordering=` — see [List query parameters](#list-query-parameters). No pagination |
+| GET / PUT / PATCH / DELETE | `/api/business/customers/{id}/` | Deleting a customer keeps their sales with `customer = null`; those sales no longer count in any customer's balance |
+| GET | `/api/business/customers/{id}/history/` | Financial summary and sales of one customer (below) |
 
-Outstanding balance per customer is **not** provided; sum `remaining_amount` of the history on the client
-only as a display aid until the backend adds it.
+### GET `/api/business/customers/{id}/history/` — auth
+```json
+{
+  "customer": {"id": 1, "name": "Omar", "phone": "0791", "address": "", "created_at": "ISO", "updated_at": "ISO"},
+  "summary": {"total_purchases": "500.00", "total_paid": "350.00", "outstanding_balance": "150.00"},
+  "sales": [ /* Sale objects, newest first (see Sales) */ ]
+}
+```
+- `total_purchases` = sum of the customer's sale totals, `total_paid` = sum of what was paid on them (sale creation
+  amount + recorded payments), `outstanding_balance = total_purchases − total_paid`. Calculated on every request,
+  so edited or deleted sales and new payments are always reflected. A customer without sales gets `"0.00"` values and `"sales": []`.
+- **Contract change:** this endpoint used to return only the array of sales. The array is now under `sales`.
+- Unknown customer, or a customer of another business → `404 {"detail": "No Customer matches the given query."}`.
 
 ---
 
@@ -188,7 +237,8 @@ Sale object:
  "items": [{"id": 1, "product": 1, "quantity": 4, "unit_price": "2.50", "subtotal": "10.00"}]}
 ```
 - `payment_status`: `PAID` | `PARTIAL` | `UNPAID`, computed by the server (BR-10). `customer` and `items[].product` are **IDs only** — the response has no customer or product names; look them up from the customer/product lists.
-- Prices come from the product's current `selling_price`; the client cannot send a price.
+- **Historical prices:** `items[].unit_price` is the price at the time of the sale and never changes. Editing a product's
+  `selling_price` affects only later sales. The client cannot send a price.
 - Debts are represented by sales with `payment_status != PAID`. There is no separate debt entity and **no `?payment_status=` filter** (ignored) — filter on the client.
 
 ### POST `/api/business/sales/` — auth
@@ -199,16 +249,23 @@ Sale object:
 `201` sale. Errors (400 `{"detail": ...}`): `"Insufficient stock for <name>."`, `"Invalid product."`, `"Invalid customer."`, `"Paid amount cannot exceed total amount."`; `{"items": ["At least one item is required."]}`.
 
 ### GET `/api/business/sales/` — auth
-Array of sales. ⚠️ No date filter (`?date=` ignored), no ordering guarantee, no pagination.
+Array of sales, newest first. Query parameters: `date_from`, `date_to`, `ordering`, `page`, `page_size` — see
+[List query parameters](#list-query-parameters). There is no `?payment_status=` filter.
 
 ### GET / PATCH / PUT / DELETE `/api/business/sales/{id}/` — auth
-- PATCH/PUT body (all optional): `customer` (id or null), `paid_amount`, `items` (`[{"product","quantity"}]`). PUT behaves like PATCH.
-- Sending `items` **replaces all items**: old stock is restored, new items are priced at the product's *current* price.
-- The resulting `paid_amount` may not exceed the new total (`400 {"detail": "Paid amount cannot exceed total amount."}`, nothing is changed). `payment_status` is recomputed on every edit.
+- PATCH/PUT body (all optional): `customer` (id or null) and `items` (`[{"product","quantity"}]`). PUT behaves like PATCH.
+- **Payments cannot be edited here.** Sending `paid_amount`, `payment_status`, `remaining_amount` or `total_amount` returns
+  `400 {"paid_amount": ["This field cannot be edited. Record payments with POST /api/business/sales/{id}/payments/."]}`
+  and nothing is changed. Money received is recorded **only** through the payments endpoint below.
+- Sending `items` sets the final list of items: stock of the previous items is restored and the new list is deducted.
+  A product that was already on the sale **keeps its original `unit_price`** (only the quantity changes); a product added
+  by the edit is priced at its current `selling_price`. Totals are recalculated.
+- The new total may not be lower than what was already paid (`400 {"detail": "Paid amount cannot exceed total amount."}`, nothing is changed).
+  `payment_status` and `remaining_amount` are recalculated on every edit.
 - `DELETE` → `204`; stock is restored and its payments are deleted. Another user's sale → 404.
-- ⚠️ Setting `paid_amount` through PATCH does **not** create a payment record. Use the payments endpoint for money received so history stays accurate.
 
 ### POST `/api/business/sales/{sale_id}/payments/` — auth
+The **only** way to record a payment after the sale was created (the optional `paid_amount` of `POST /sales/` records the first one).
 ```json
 {"amount": "1.00", "payment_method": "CASH", "note": "optional"}
 ```
@@ -225,7 +282,7 @@ Fields: `id`, `amount` (required), `category` (required free-text string ≤ 100
 
 | Method | Path | Notes |
 |---|---|---|
-| GET / POST | `/api/business/expenses/` | Only filter: `?category=<exact text>`. ⚠️ No date filter, no ordering |
+| GET / POST | `/api/business/expenses/` | `?category=<exact text>`, `date_from`, `date_to`, `ordering`, `page`, `page_size` — see [List query parameters](#list-query-parameters) |
 | GET / PUT / PATCH / DELETE | `/api/business/expenses/{id}/` | |
 
 Missing `expense_date` → `400 {"expense_date": ["This field is required."]}`. Categories are plain text, not a managed list.
@@ -234,9 +291,9 @@ Missing `expense_date` → `400 {"expense_date": ["This field is required."]}`. 
 
 ## Not available (do not build against these)
 
-Invoices / PDF, notifications / alerts, backup / restore, reports & chart series (weekly/monthly),
+Invoices / PDF, notifications / alerts, backup / restore, chart series, full reports,
 debts owed to suppliers, debt due dates, `PATCH /api/auth/me/`, phone/email verification (OTP), file upload,
-search, pagination, date filters.
+a `?payment_status=` filter, a payments list.
 
 ## Integration checklist (verified against the running API)
 
@@ -250,9 +307,10 @@ search, pagination, date filters.
 | 6 | Product delete after sale · negative adjust | ✅ 400 with a message (was 500) |
 | 7 | Sales create + all validation errors, list, detail, delete | ✅ |
 | 8 | Payments (valid, zero, negative, over-remaining, bad method, missing method) | ✅ |
-| 9 | Sale PATCH (paid ≤ total enforced, status recomputed) | ✅ · ⚠️ `paid_amount` edit creates no payment row |
-| 10 | Customers create / history | ✅ |
-| 11 | Expenses create / list / `?category` / validation | ✅ |
-| 12 | Dashboard | ✅ decimal strings · ⚠️ today only |
+| 9 | Sale PATCH: `paid_amount` rejected, paid ≤ total enforced, status recomputed, historical prices kept | ✅ |
+| 10 | Customers create / search / order / history + balance summary | ✅ |
+| 11 | Expenses create / list / `?category` / date filters / validation | ✅ |
+| 11b | Sales and expenses: date filters, ordering, opt-in pagination | ✅ |
+| 12 | Dashboard today / week / month | ✅ decimal strings |
 | 13 | User A cannot read/change user B's product, sale, customer, expense, payment, stock; B's lists/dashboard are empty | ✅ |
 | 14 | Unauthenticated requests → 401 | ✅ |

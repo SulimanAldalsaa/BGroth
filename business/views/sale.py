@@ -1,7 +1,12 @@
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from business.filters import StableOrderingFilter, filter_by_date_range
+from business.models import Sale
+from business.pagination import OptionalPageNumberPagination
+from business.serializers.filters import DateRangeSerializer
 from business.serializers.sale import (
     SaleCreateSerializer,
     SaleResponseSerializer,
@@ -12,18 +17,27 @@ from business.services.sale_service import (
     update_sale,
     delete_sale,
 )
-from business.utils import get_user_business   
+from business.utils import get_user_business
 
 
+@extend_schema_view(get=extend_schema(parameters=[DateRangeSerializer]))
 class SaleListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
+    pagination_class = OptionalPageNumberPagination
+    filter_backends = [StableOrderingFilter]
+    ordering_fields = ["sold_at", "total_amount", "paid_amount"]
+    ordering = ["-sold_at"]
 
     def get_queryset(self):
         business = get_user_business(self.request.user)
-        return (
-            __import__("business.models", fromlist=["Sale"]).Sale.objects
-            .filter(business=business)
-            .prefetch_related("items")
+        queryset = Sale.objects.filter(
+            business=business
+        ).prefetch_related("items")
+
+        return filter_by_date_range(
+            queryset,
+            self.request,
+            "sold_at__date",
         )
 
     def get_serializer_class(self):
@@ -62,7 +76,6 @@ class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         business = get_user_business(self.request.user)
-        from business.models import Sale
         return Sale.objects.filter(
             business=business
         ).prefetch_related("items")
@@ -89,7 +102,6 @@ class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
                 business=business,
                 user=request.user,
                 customer_id=serializer.validated_data.get("customer"),
-                paid_amount=serializer.validated_data.get("paid_amount"),
                 items=serializer.validated_data.get("items"),
             )
         except ValueError as exc:

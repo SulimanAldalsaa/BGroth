@@ -697,6 +697,26 @@
         "/api/business/customers/": {
             "get": {
                 "operationId": "business_customers_list",
+                "parameters": [
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "required": false,
+                        "in": "query",
+                        "description": "A search term.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "tags": [
                     "business"
                 ],
@@ -933,7 +953,7 @@
         },
         "/api/business/customers/{id}/history/": {
             "get": {
-                "operationId": "business_customers_history_list",
+                "operationId": "business_customers_history_retrieve",
                 "parameters": [
                     {
                         "in": "path",
@@ -957,10 +977,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/SaleResponse"
-                                    }
+                                    "$ref": "#/components/schemas/CustomerHistory"
                                 }
                             }
                         },
@@ -997,6 +1014,61 @@
         "/api/business/expenses/": {
             "get": {
                 "operationId": "business_expenses_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "category",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Only expenses with exactly this category."
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "Include records on or after this date (YYYY-MM-DD)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "Include records on or before this date (YYYY-MM-DD)."
+                    },
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page_size",
+                        "required": false,
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
                 "tags": [
                     "business"
                 ],
@@ -1010,10 +1082,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/Expense"
-                                    }
+                                    "$ref": "#/components/schemas/PaginatedExpenseList"
                                 }
                             }
                         },
@@ -1234,6 +1303,26 @@
         "/api/business/products/": {
             "get": {
                 "operationId": "business_products_list",
+                "parameters": [
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "required": false,
+                        "in": "query",
+                        "description": "A search term.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "tags": [
                     "business"
                 ],
@@ -1582,6 +1671,53 @@
         "/api/business/sales/": {
             "get": {
                 "operationId": "business_sales_list",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "date_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "Include records on or after this date (YYYY-MM-DD)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "date_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        },
+                        "description": "Include records on or before this date (YYYY-MM-DD)."
+                    },
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page_size",
+                        "required": false,
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
                 "tags": [
                     "business"
                 ],
@@ -1595,10 +1731,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/SaleResponse"
-                                    }
+                                    "$ref": "#/components/schemas/PaginatedSaleResponseList"
                                 }
                             }
                         },
@@ -2058,9 +2191,65 @@
                     "updated_at"
                 ]
             },
+            "CustomerHistory": {
+                "type": "object",
+                "properties": {
+                    "customer": {
+                        "$ref": "#/components/schemas/Customer"
+                    },
+                    "summary": {
+                        "$ref": "#/components/schemas/CustomerSummary"
+                    },
+                    "sales": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SaleResponse"
+                        }
+                    }
+                },
+                "required": [
+                    "customer",
+                    "sales",
+                    "summary"
+                ]
+            },
+            "CustomerSummary": {
+                "type": "object",
+                "properties": {
+                    "total_purchases": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "total_paid": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "outstanding_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "outstanding_balance",
+                    "total_paid",
+                    "total_purchases"
+                ]
+            },
             "Dashboard": {
                 "type": "object",
                 "properties": {
+                    "today": {
+                        "$ref": "#/components/schemas/DashboardPeriod"
+                    },
+                    "week": {
+                        "$ref": "#/components/schemas/DashboardPeriod"
+                    },
+                    "month": {
+                        "$ref": "#/components/schemas/DashboardPeriod"
+                    },
                     "sales_today": {
                         "type": "string",
                         "format": "decimal",
@@ -2079,8 +2268,36 @@
                 },
                 "required": [
                     "expenses_today",
+                    "month",
                     "profit_today",
-                    "sales_today"
+                    "sales_today",
+                    "today",
+                    "week"
+                ]
+            },
+            "DashboardPeriod": {
+                "type": "object",
+                "properties": {
+                    "sales": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "expenses": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    },
+                    "profit": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,12}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "expenses",
+                    "profit",
+                    "sales"
                 ]
             },
             "Expense": {
@@ -2156,6 +2373,24 @@
                 ],
                 "type": "string",
                 "description": "* `IN` - IN\n* `OUT` - OUT\n* `ADJUSTMENT` - ADJUSTMENT"
+            },
+            "PaginatedExpenseList": {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/components/schemas/Expense"
+                    }
+                }
+            },
+            "PaginatedSaleResponseList": {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/components/schemas/SaleResponse"
+                    }
+                }
             },
             "PasswordResetConfirm": {
                 "type": "object",
@@ -2385,11 +2620,6 @@
                     "customer": {
                         "type": "integer",
                         "nullable": true
-                    },
-                    "paid_amount": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
                     },
                     "items": {
                         "type": "array",
@@ -2679,11 +2909,6 @@
                     "customer": {
                         "type": "integer",
                         "nullable": true
-                    },
-                    "paid_amount": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,2})?$"
                     },
                     "items": {
                         "type": "array",
