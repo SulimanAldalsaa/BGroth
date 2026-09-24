@@ -1,8 +1,9 @@
 # BGroth API Reference (for the Android / Kotlin team)
 
 Derived from the backend source and **verified by calling the running API** and by the automated test suite
-(`python manage.py test`, 33 tests). Where behaviour is a bug or a gap it is flagged
-with ⚠️ — see [`GAP_REPORT.md`](GAP_REPORT.md) for the full list.
+(`python manage.py test`, 211 tests as of Sprint 3 Phase 4). Where behaviour is a bug or a gap it is flagged
+with ⚠️ — see [`GAP_REPORT.md`](GAP_REPORT.md) for the pre-Sprint-3 list (invoices, debts, reports and the
+profile update it describes as missing are now implemented; everything else in it is still accurate).
 
 Base URL: see the README (`http://10.0.2.2:8000/` from the emulator). All bodies are JSON
 (`Content-Type: application/json`).
@@ -26,6 +27,8 @@ Base URL: see the README (`http://10.0.2.2:8000/` from the emulator). All bodies
 | `GET /customers/` | `name` (contains, case-insensitive) | `name`, `created_at` | `name` | – | – |
 | `GET /sales/` | – | `sold_at`, `total_amount`, `paid_amount` | `-sold_at` | `date_from`, `date_to` | `page`, `page_size` |
 | `GET /expenses/` | – | `expense_date`, `amount`, `created_at` | `-expense_date` | `date_from`, `date_to` | `page`, `page_size` |
+| `GET /invoices/` | – | `issued_at`, `total` | `-issued_at` | `date_from`, `date_to` (on `issued_at`) | `page`, `page_size` |
+| `GET /debts/` | `party_name` (contains, case-insensitive) | `due_date`, `original_amount`, `created_at` | `-created_at` | `due_before` (see [Debts](#debts)) | – |
 
 - Parameters combine freely (for example `?category=rent&date_from=2026-09-01&ordering=-amount&page_size=10`).
   Everything is applied to the caller's own business only.
@@ -103,7 +106,25 @@ Request `{"refresh": "<refresh>"}` → `200 {"message": "Logged out successfully
 Missing refresh → `400 {"error": "refresh token is required."}`; invalid → `400 {"error": "Invalid or already expired token."}`.
 
 ### GET `/api/auth/me/` — auth required
-`200` user object (same as `user` above). ⚠️ No `PATCH`/`PUT` (405): the user's name cannot be edited.
+`200` user object (same as `user` above).
+
+### PATCH `/api/auth/me/` — auth required
+Edits the caller's own profile. Only `first_name` and `last_name` are editable — the only two
+profile fields the `User` model has beyond identity/account-status fields. Both are optional
+(partial update) and accept blank strings.
+```json
+{"first_name": "Khalid", "last_name": "Hassan"}
+```
+`200` → the same user object as `GET`. `PUT` is **not** supported (405, same convention as `/api/business/`).
+
+`email` and every other field (`id`, `is_active`, `is_email_verified`, `is_staff`, `date_joined`,
+`password`, `full_name`) are protected: including any of them in the request body — even alongside
+a valid `first_name`/`last_name` — rejects the **whole** request with `400` and nothing is changed:
+```json
+{"email": ["This field cannot be edited."]}
+```
+There is no email-change workflow (only password reset), so `email` cannot be changed at all.
+Unauthenticated → `401`.
 
 ### POST `/api/auth/change-password/` — auth required
 Request `{"old_password", "new_password", "new_password_confirm"}` → `200 {"message": "Password changed successfully."}`.
@@ -289,11 +310,260 @@ Missing `expense_date` → `400 {"expense_date": ["This field is required."]}`. 
 
 ---
 
+## Invoices
+
+Sprint 3 (FR-19, FR-20, BR-11, BR-12, UC-5). An invoice is a **frozen snapshot** of a sale at the moment
+it is issued: once created, its stored fields never change, even if the underlying sale, its items, its
+customer, or a product are edited or deleted afterwards. There is no way to create an invoice except from
+an existing sale, and there is no generic update endpoint — only cancellation.
+
+Invoice object:
+```json
+{
+  "id": 1,
+  "sale": 1,
+  "invoice_number": "INV-20260924-0001",
+  "status": "ISSUED",
+  "issued_at": "2026-09-24T12:01:30.627966Z",
+  "customer_name": "",
+  "customer_phone": "",
+  "total": "20.00",
+  "notes": "",
+  "items": [
+    {"id": 1, "product_name": "Cola", "quantity": 2, "unit_price": "10.00", "line_total": "20.00"}
+  ]
+}
+```
+- `invoice_number` format `INV-YYYYMMDD-0001`, unique **per business per day**; allocated under a database
+  row lock so two simultaneous requests can never receive the same number.
+- `status`: `ISSUED` | `CANCELLED`.
+- `customer_name`/`customer_phone` and every row in `items[]` are a **copy** taken at issue time from the
+  sale's customer and sale items. They are never looked up live again, so a later rename, price change, or
+  even deleting the customer/product afterwards has no effect on an already-issued invoice. If the sale had
+  no customer, both fields are `""` (no data is invented).
+- `total` is a copy of the sale's `total_amount` at issue time.
+- At most one **active** (`ISSUED`) invoice can exist per sale at a time — but a sale whose only invoice was
+  cancelled can be invoiced again (BR-12's "cancel and reissue"); the cancelled invoice is kept, unchanged,
+  alongside the new one.
+
+| Method | Path | Notes |
+|---|---|---|
+| POST | `/api/business/sales/{sale_id}/invoice/` | Create an invoice from this sale |
+| GET | `/api/business/invoices/` | List, newest first — see [List query parameters](#list-query-parameters) |
+| GET | `/api/business/invoices/{id}/` | Detail, including `items` |
+| POST | `/api/business/invoices/{id}/cancel/` | `ISSUED` → `CANCELLED` |
+| GET | `/api/business/invoices/{id}/pdf/` | `200`, `Content-Type: application/pdf` |
+
+### POST `/api/business/sales/{sale_id}/invoice/` — auth
+Request body: `{"notes": "optional, ≤ 500 chars"}` (or `{}`).
+- `sale_id` must belong to the caller's business → unknown or another business's sale → `404`.
+- BR-11: a second attempt while the sale already has an active invoice →
+  `400 {"detail": "An invoice already exists for this sale."}`.
+- `201` → the invoice object above.
+- There is **no** `POST /api/business/invoices/` that takes a manually supplied sale/customer/items —
+  invoices can only be created through this sale-scoped endpoint.
+
+### POST `/api/business/invoices/{id}/cancel/` — auth
+- `ISSUED` → `CANCELLED`. `200` → the invoice object (`"status": "CANCELLED"`).
+- Cancelling an already-cancelled invoice → `400 {"detail": "Invoice is already cancelled."}`.
+- Cancellation changes only the invoice's own `status`. It never deletes the invoice or its items, never
+  touches the linked sale or its payments, and never restores stock.
+- Unknown invoice, or one belonging to another business → `404`.
+
+### GET `/api/business/invoices/{id}/pdf/` — auth
+- `200`, `Content-Type: application/pdf`; the body is the raw PDF (business name/contact info, invoice
+  number, issue date, status, customer name/phone, the item table, total, notes), rendered **only** from the
+  stored Invoice/InvoiceItem snapshot — never from the live sale/product/customer records.
+- A cancelled invoice's PDF is still available and shows `"status": "CANCELLED"`.
+- Unknown invoice, or one belonging to another business → `404`.
+
+### Deleting a sale that has an invoice
+`DELETE /api/business/sales/{id}/` on a sale that has any invoice (issued or cancelled) is rejected:
+`400 {"detail": "This sale has an invoice and cannot be deleted."}`. The sale and its invoice(s) are
+unaffected.
+
+---
+
+## Debts
+
+Sprint 3 (FR-13, FR-15, BR-8, BR-9, BR-10, UC-4). This is a **separate, standalone** entity mainly for debts
+the business owes to others (`PAYABLE`, e.g. suppliers) — it does not replace or duplicate the existing
+receivable tracking already provided by `Sale`/`Payment` (an unpaid or partially-paid sale). A `RECEIVABLE`
+debt type also exists (see [Reports](#reports) for why it is not double-counted with `Sale`-based
+receivables in the performance report).
+
+Debt object:
+```json
+{
+  "id": 1,
+  "debt_type": "PAYABLE",
+  "party_name": "Supplier A",
+  "customer": null,
+  "sale": null,
+  "original_amount": "500.00",
+  "paid_amount": "500.00",
+  "remaining_amount": "0.00",
+  "due_date": "2026-10-01",
+  "status": "PAID",
+  "notes": "October stock",
+  "created_at": "2026-09-24T12:01:30.822752Z",
+  "updated_at": "2026-09-24T12:01:30.856804Z"
+}
+```
+- `debt_type`: `RECEIVABLE` | `PAYABLE` — mandatory on create (BR-8), never optional/defaulted.
+- `status`: `UNPAID` | `PARTIAL` | `PAID`, computed by the server from `paid_amount` vs. `original_amount`
+  (BR-10) — never accepted from the client.
+- `remaining_amount = original_amount - paid_amount` (read-only, like `Sale.remaining_amount`).
+- `customer`/`sale` are optional foreign keys (ids), for linking a `RECEIVABLE` debt back to where it came
+  from; both are usually `null` for a `PAYABLE` debt.
+- There is **no `DELETE`** for debts (`405`): BR-9 ("a debt with transaction history must not be silently
+  deleted") is satisfied by never exposing deletion at all, rather than adding a confirmation flow.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET / POST | `/api/business/debts/` | `?type=`, `?status=`, `?due_before=`, `?search=` (`party_name`), `?ordering=` — see [List query parameters](#list-query-parameters) |
+| GET / PATCH / PUT | `/api/business/debts/{id}/` | `PUT` behaves like `PATCH` (same convention as Sale); `DELETE` not supported (405) |
+| POST | `/api/business/debts/{id}/payments/` | Record a payment (see below) |
+| GET | `/api/business/debts/due/` | Debts due soon (see below) |
+
+### POST `/api/business/debts/` — auth
+```json
+{"debt_type": "PAYABLE", "party_name": "Supplier A", "original_amount": "500.00",
+ "due_date": "2026-10-01", "notes": "October stock"}
+```
+`debt_type`, `party_name`, `original_amount` (≥ 0) required; `customer`, `sale` (ids, scoped to the caller's
+business — a foreign or unknown id → `400`), `due_date`, `notes` (≤ 500 chars) optional. `201` → the debt
+object, `paid_amount: "0.00"`, `status: "UNPAID"`.
+Errors (400): `{"debt_type": ["This field is required."]}` / `["\"X\" is not a valid choice."]`,
+`{"original_amount": ["Ensure this value is greater than or equal to 0."]}`; an unknown `customer`/`sale`
+id, **or one belonging to another business**, → `{"detail": "Invalid customer."}` / `{"detail": "Invalid sale."}`
+(not a field error — these are checked in the service layer, after the serializer's own field validation
+already passed).
+
+### GET `/api/business/debts/` and GET `/api/business/debts/{id}/` — auth
+List, or one debt scoped to the caller's business; unknown/foreign id → `404`.
+`?due_before=YYYY-MM-DD` filters to debts due on or before that date; a malformed value →
+`400 {"due_before": "Date has wrong format. Use YYYY-MM-DD."}` (plain string, not a list). `?type=` and
+`?status=` filter on exact `debt_type`/`status` values; an unrecognised value simply matches nothing
+(no error), the same leniency as an unknown `?ordering=` field elsewhere in this API.
+
+### PATCH / PUT `/api/business/debts/{id}/` — auth
+Only `party_name`, `due_date`, `notes` are editable. `paid_amount`, `status`, `debt_type`,
+`original_amount`, `customer`, `sale`, `business` are rejected — same convention as `Sale`'s update
+endpoint:
+```json
+{"paid_amount": ["This field cannot be edited. Record payments with POST /api/business/debts/{id}/payments/."]}
+```
+A rejected request changes nothing, even the fields that would otherwise have been valid. `PUT` behaves
+exactly like `PATCH` here (all fields are optional either way — again, the same convention `Sale` already
+uses). `DELETE` is not supported (405). Unknown/foreign debt → `404`.
+
+### POST `/api/business/debts/{id}/payments/` — auth
+The only way to change `paid_amount`.
+```json
+{"amount": "100.00", "note": "optional, ≤ 255 chars"}
+```
+- `amount` must be `> 0` and `<= remaining_amount`; `amount ≤ 0` → a field error
+  (`{"amount": ["Ensure this value is greater than or equal to 0.01."]}`); exceeding the remaining balance →
+  `400 {"detail": "Payment cannot exceed remaining amount."}`.
+- `201` → `{"id": 1, "debt": 1, "amount": "100.00", "note": "", "created_at": "ISO"}`. The debt's
+  `paid_amount`/`remaining_amount`/`status` are updated; re-fetch the debt to see them.
+- Multiple partial payments are supported; the debt becomes `PAID` only once `paid_amount` exactly equals
+  `original_amount` (BR-10).
+- Unknown/foreign debt → `404`.
+
+### GET `/api/business/debts/due/` — auth
+```
+GET /api/business/debts/due/?days=7
+```
+Returns debts whose `due_date` is from **today through today + `days`** (inclusive), excluding `PAID`
+debts and debts with no `due_date`. `days` defaults to `7` if omitted; must be a non-negative integer,
+otherwise `400 {"days": "Must be an integer."}` or `400 {"days": "Must not be negative."}` (plain string,
+not a list — this one is a manual check, not a serializer field).
+**Note:** this is literally "today through today + N days" — an **overdue** debt (`due_date` in the past)
+is *not* included. Response is a plain array of debt objects (no pagination).
+
+### Notifications (FR-15)
+FR-15 asks for an alert when a debt is due or about to become due. This sprint implements only the data
+endpoint above (`GET .../debts/due/`) for the Android app to poll and show its own in-app alert/badge.
+**No push notification (FCM) infrastructure exists or is planned for this sprint** — there was no existing
+notification system to build on, and it is explicitly out of scope.
+
+---
+
+## Reports
+
+Sprint 3 (FR-11, FR-24, FR-25, UC-3). Both endpoints use the server time zone (`TIME_ZONE = UTC`), the same
+as the plain `dashboard/` endpoint — "today" is a UTC calendar day, not the merchant's local time.
+
+### GET `/api/business/dashboard/series/` — auth
+Time series for charting (FR-11, FR-25): one point per day/week/month, each with `sales`, `expenses` and
+`profit = sales - expenses` for that bucket.
+```
+GET /api/business/dashboard/series/?period=day&from=2026-09-20&to=2026-09-22
+```
+```json
+{
+  "series": [
+    {"period": "2026-09-20", "sales": "10.00", "expenses": "2.00", "profit": "8.00"},
+    {"period": "2026-09-21", "sales": "5.00", "expenses": "0.00", "profit": "5.00"},
+    {"period": "2026-09-22", "sales": "0.00", "expenses": "0.00", "profit": "0.00"}
+  ]
+}
+```
+- `period`: `day` (default) | `week` | `month`. Invalid value → `400 {"period": ["\"X\" is not a valid choice."]}`.
+- `from`/`to` (`YYYY-MM-DD`, inclusive). **Default when omitted:** a trailing window of 7 points ending at
+  `to` (default `to`: today) — e.g. `period=day` with nothing supplied returns the last 7 days including
+  today. Malformed date → the same shape as `date_from`/`date_to` elsewhere in this API:
+  `400 {"from": ["Date has wrong format. Use one of these formats instead: YYYY-MM-DD."]}` (or `{"to": [...]}`).
+  `from` after `to` → `400 {"to": "to must not be earlier than from."}` (a plain string here, not a list —
+  this check, unlike the date-format one, isn't a serializer field error).
+- `period` label is the **start date** of that bucket. A `week` point is always a full **Monday–Sunday**
+  week and a `month` point a full **calendar month** — the same definitions the plain `dashboard/` endpoint
+  already uses for its own `week`/`month` figures — even if that extends slightly outside the requested
+  `from`/`to` at the edges.
+- A request that would produce more than 366 points is rejected (`400 {"to": "Range is too large..."}`) —
+  a safety limit, not a documented business rule.
+
+### GET `/api/business/reports/performance/` — auth
+A comprehensive snapshot (FR-24): sales/expenses/profit for a period, plus the business's **current**
+outstanding balances and stock alerts.
+```
+GET /api/business/reports/performance/?from=2026-09-01&to=2026-09-30
+```
+```json
+{
+  "total_sales": "100.00",
+  "total_expenses": "40.00",
+  "profit": "60.00",
+  "outstanding_receivables": "30.00",
+  "outstanding_payables": "130.00",
+  "low_stock_count": 2
+}
+```
+- `total_sales`, `total_expenses`, `profit` are scoped to `from`/`to` (inclusive `YYYY-MM-DD`).
+  **Default when both are omitted:** the whole current calendar month (matching `dashboard/`'s own
+  `month` figure, which spans the full month even for days that haven't happened yet). Supplying only one
+  of `from`/`to` falls back to today / the 1st of that month for the other side instead of the whole-month
+  default. Invalid date / `from` after `to` → same 400 shapes as the series endpoint above.
+- `outstanding_receivables` and `outstanding_payables` are **not** scoped to `from`/`to` — they are the
+  business's live balances right now, the same way `GET /customers/{id}/history/` already reports a live
+  `outstanding_balance` regardless of any date filter.
+- **How receivables/payables avoid double-counting:** `outstanding_receivables` is calculated only from
+  `Sale`/`Payment` (`total_amount - paid_amount` summed over every sale) — the pre-existing source of truth
+  for money owed *to* the business. `outstanding_payables` is calculated only from `Debt` where
+  `debt_type = "PAYABLE"` (`original_amount - paid_amount`). A `RECEIVABLE` debt is **never** added to
+  either figure, so a receivable is never counted twice.
+- `low_stock_count`: number of products with `quantity <= minimum_stock` — the exact same rule as
+  `GET /products/low-stock/`.
+
+---
+
 ## Not available (do not build against these)
 
-Invoices / PDF, notifications / alerts, backup / restore, chart series, full reports,
-debts owed to suppliers, debt due dates, `PATCH /api/auth/me/`, phone/email verification (OTP), file upload,
-a `?payment_status=` filter, a payments list.
+Real push notifications / alerts (FCM or similar), backup / restore, phone/email verification (OTP),
+product image upload, a `?payment_status=` filter on sales, a `GET` list of a sale's payments (payments
+still cannot be listed — only recorded via `POST .../payments/`), and `DELETE` on a debt.
 
 ## Integration checklist (verified against the running API)
 
@@ -314,3 +584,11 @@ a `?payment_status=` filter, a payments list.
 | 12 | Dashboard today / week / month | ✅ decimal strings |
 | 13 | User A cannot read/change user B's product, sale, customer, expense, payment, stock; B's lists/dashboard are empty | ✅ |
 | 14 | Unauthenticated requests → 401 | ✅ |
+| 15 | Invoices: create / duplicate rejected / snapshot survives product & customer edits / cancel / re-cancel rejected / cancelled stays readable / reissue after cancel / PDF 200 + `application/pdf` / sale-with-invoice delete rejected / cross-user 404 | ✅ (Sprint 3) |
+| 16 | Debts: create (payable & receivable) / invalid type / negative amount / `PATCH` protects money fields / payments (zero, negative, over-remaining, partial×N, exact final → `PAID`) / `due/` window & `PAID` exclusion / filters (`type`, `status`, `due_before`, `search`) / cross-user 404 | ✅ (Sprint 3) |
+| 17 | Reports: `dashboard/series/` bucketing (day/week/month), defaults, invalid `period`, range-too-large; `reports/performance/` aggregation, current-month default, receivables/payables not double-counted, low-stock count, cross-user isolation | ✅ (Sprint 3) |
+| 18 | Profile: `PATCH /api/auth/me/` allowed fields, protected fields (400, nothing applied), unauthenticated 401, `GET` shape unchanged | ✅ (Sprint 3) |
+
+Checks 15–18 are backed by the automated test suite (`business/tests/test_invoices.py`,
+`test_debts.py`, `test_reports.py`, `accounts/tests/test_profile.py`) rather than manual `curl` calls, the
+same as the rest of this checklist's underlying verification since Sprint 2.

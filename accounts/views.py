@@ -7,7 +7,7 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 
 from .models import PasswordResetToken, User
@@ -16,6 +16,7 @@ from .serializers import (
     LoginSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    ProfileUpdateSerializer,
     RegisterSerializer,
     UserSerializer,
     AuthResponseSerializer,
@@ -82,11 +83,24 @@ class LogoutView(APIView):
 
 # CURRENT USER / CHANGE PASSWORD
 
-@extend_schema(responses={200: UserSerializer})
+@extend_schema_view(
+    get=extend_schema(responses={200: UserSerializer}),
+    patch=extend_schema(request=ProfileUpdateSerializer, responses={200: UserSerializer}),
+)
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        return Response(UserSerializer(request.user).data)
+
+    def patch(self, request):
+        serializer = ProfileUpdateSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(UserSerializer(request.user).data)
 
 @extend_schema(request=ChangePasswordSerializer, responses={200: MessageResponseSerializer})

@@ -4,10 +4,12 @@ REST API for **BGroth**, a small-business management app for merchants (sales, e
 customers, payments/debts and a daily dashboard). The API is consumed by the native Android app
 (Kotlin + Jetpack Compose).
 
-> Status: MVP backend. Authentication, business profile, categories, products/inventory, customers,
-> sales, payments and expenses are implemented. Invoices, notifications, backup/restore, reports and
-> supplier debts are **not** implemented yet — see [Known limitations](#known-limitations--missing-features)
-> and [`docs/GAP_REPORT.md`](docs/GAP_REPORT.md).
+> Status: MVP backend, Sprint 3 complete. Authentication (incl. profile update), business profile,
+> categories, products/inventory, customers, sales, payments, expenses, invoices (+ PDF), debts
+> (payable/receivable) and performance reports/chart series are implemented. Real push notifications and
+> backup/restore are **not** implemented — see [Known limitations](#known-limitations--missing-features)
+> and [`docs/GAP_REPORT.md`](docs/GAP_REPORT.md) (pre-Sprint-3; invoices/debts/reports/profile it lists as
+> missing are now done).
 
 ## Project overview
 
@@ -34,18 +36,21 @@ Android app  ──HTTPS/JSON + JWT──▶  Django REST Framework  ──▶  
 - API docs: `drf-spectacular` (OpenAPI / Swagger / Redoc)
 - CORS: `django-cors-headers`
 - Config: `python-dotenv`
+- PDF generation: `reportlab` (invoice PDFs)
 
 ## Project structure
 
 ```
 authproject/   Django project: settings.py, urls.py, wsgi/asgi
-accounts/      Custom email-based User, password-reset tokens, auth endpoints
+accounts/      Custom email-based User, password-reset tokens, auth endpoints, profile update, tests/
 business/      Business domain
-  models/        Business, Category, Product, StockMovement, Customer, Sale, SaleItem, Payment, Expense
+  models/        Business, Category, Product, StockMovement, Customer, Sale, SaleItem, Payment, Expense,
+                 Invoice, InvoiceItem, InvoiceNumberSequence, Debt, DebtPayment
   serializers/   Request/response shapes
   views/         Endpoints
-  services/      sale_service, payment_service, stock_service, product_service, business_service
-  selectors/     dashboard, product and sale queries
+  services/      sale_service, payment_service, stock_service, product_service, business_service,
+                 invoice_service, invoice_pdf, debt_service
+  selectors/     dashboard, product, sale, debt and report queries
   permissions.py, utils.py (get_user_business), tests/
 docs/          API reference and gap report
 ```
@@ -86,8 +91,10 @@ Route prefixes: `/api/auth/`, `/api/business/`.
 
 ## API modules
 
-Authentication · Business · Dashboard (today / week / month) · Categories · Products (+ stock) · Customers (+ balance
-summary) · Sales · Payments · Expenses. Every endpoint, request and response is documented in [`docs/API.md`](docs/API.md).
+Authentication (+ profile update) · Business · Dashboard (today / week / month, plus a chart-series
+endpoint) · Categories · Products (+ stock) · Customers (+ balance summary) · Sales · Payments · Expenses ·
+Invoices (+ PDF, cancellation) · Debts (payable/receivable, payments, due-soon list) · Performance reports.
+Every endpoint, request and response is documented in [`docs/API.md`](docs/API.md).
 
 ## Local setup
 
@@ -154,10 +161,11 @@ ISO-8601 UTC. List endpoints return plain arrays; sales and expenses return a pa
 python manage.py test
 ```
 
-119 tests: authentication flow, business, categories, products / stock / search / ordering, customers and their balance
-summary, sales (payments, historical prices, date filters, ordering, pagination), expenses, dashboard periods,
-the OpenAPI schema and cross-user data isolation. They need PostgreSQL access (Django creates and
-drops a `test_<DB_NAME>` database).
+211 tests: authentication flow (+ profile update), business, categories, products / stock / search / ordering,
+customers and their balance summary, sales (payments, historical prices, date filters, ordering, pagination),
+expenses, dashboard periods, invoices (creation, snapshot immutability, cancellation + reissue, PDF), debts
+(validation, payments, due-date filtering), performance reports / chart series, the OpenAPI schema, and
+cross-user data isolation. They need PostgreSQL access (Django creates and drops a `test_<DB_NAME>` database).
 
 ## Security notes
 
@@ -177,10 +185,11 @@ and pin dependency versions. These are currently hard-coded in `authproject/sett
 
 ## Known limitations / missing features
 
-Not implemented (do not build UI against them yet): invoices/PDF, notifications/alerts, backup/restore,
-chart data and full reports, debts owed *to suppliers*, debt due dates, user-profile update,
-phone/email verification (OTP), a `payment_status` filter, a payments list.
-Remaining issues are listed in [`docs/GAP_REPORT.md`](docs/GAP_REPORT.md).
+Not implemented (do not build UI against them yet): real push notifications/alerts (FCM or similar),
+backup/restore, phone/email verification (OTP), product image upload, a `payment_status` filter on sales,
+a payments list (a sale's payments can be recorded but not listed), and `DELETE` on a debt.
+Remaining pre-Sprint-3 issues are listed in [`docs/GAP_REPORT.md`](docs/GAP_REPORT.md) (its invoices,
+debts, reports and user-profile-update gaps are now closed).
 
 ## License
 

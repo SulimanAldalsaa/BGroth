@@ -6,12 +6,23 @@ from business.views import (
     CustomerDetailView,
     CustomerHistoryView,
     CustomerListCreateView,
+    DashboardSeriesView,
     DashboardView,
+    DebtDetailView,
+    DebtDueListView,
+    DebtListCreateView,
+    DebtPaymentCreateView,
     ExpenseDetailView,
     ExpenseListCreateView,
+    InvoiceCancelView,
+    InvoiceCreateView,
+    InvoiceDetailView,
+    InvoiceListView,
+    InvoicePdfView,
     LowStockProductListView,
     OutOfStockProductListView,
     PaymentCreateView,
+    PerformanceReportView,
     ProductDetailView,
     ProductListCreateView,
     ProductStockAdjustView,
@@ -31,6 +42,18 @@ urlpatterns = [
         "dashboard/",
         DashboardView.as_view(),
         name="dashboard",
+    ),
+
+    path(
+        "dashboard/series/",
+        DashboardSeriesView.as_view(),
+        name="dashboard-series",
+    ),
+
+    path(
+        "reports/performance/",
+        PerformanceReportView.as_view(),
+        name="reports-performance",
     ),
 
     path(
@@ -105,6 +128,60 @@ urlpatterns = [
         "sales/<int:sale_id>/payments/",
         PaymentCreateView.as_view(),
         name="sale-payment-create",
+    ),
+
+    path(
+        "sales/<int:sale_id>/invoice/",
+        InvoiceCreateView.as_view(),
+        name="sale-invoice-create",
+    ),
+
+    path(
+        "invoices/",
+        InvoiceListView.as_view(),
+        name="invoice-list",
+    ),
+
+    path(
+        "invoices/<int:pk>/",
+        InvoiceDetailView.as_view(),
+        name="invoice-detail",
+    ),
+
+    path(
+        "invoices/<int:pk>/cancel/",
+        InvoiceCancelView.as_view(),
+        name="invoice-cancel",
+    ),
+
+    path(
+        "invoices/<int:pk>/pdf/",
+        InvoicePdfView.as_view(),
+        name="invoice-pdf",
+    ),
+
+    path(
+        "debts/",
+        DebtListCreateView.as_view(),
+        name="debt-list-create",
+    ),
+
+    path(
+        "debts/due/",
+        DebtDueListView.as_view(),
+        name="debt-due-list",
+    ),
+
+    path(
+        "debts/<int:pk>/",
+        DebtDetailView.as_view(),
+        name="debt-detail",
+    ),
+
+    path(
+        "debts/<int:debt_id>/payments/",
+        DebtPaymentCreateView.as_view(),
+        name="debt-payment-create",
     ),
 
     path(

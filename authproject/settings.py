@@ -140,11 +140,18 @@ SIMPLE_JWT = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "BGroth API",
-    "DESCRIPTION": "BGroth backend: authentication, business profile, products/inventory, customers, sales, payments, expenses and dashboard.",
+    "DESCRIPTION": "BGroth backend: authentication, business profile, products/inventory, customers, sales, payments, expenses, dashboard, invoices, debts and reports.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "SWAGGER_UI_SETTINGS": {
         "persistAuthorization": True,
+    },
+    # Invoice.Status and Debt.Status both use a field named "status", and
+    # Debt.Status happens to share Sale.PaymentStatus's value set; without
+    # this, drf-spectacular auto-names their OpenAPI enums ambiguously.
+    "ENUM_NAME_OVERRIDES": {
+        "InvoiceStatusEnum": "business.models.invoice.Invoice.Status",
+        "DebtStatusEnum": "business.models.debt.Debt.Status",
     },
 }
 

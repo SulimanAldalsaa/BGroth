@@ -1,3 +1,4 @@
+from django.db.models import ProtectedError
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -125,6 +126,11 @@ class SaleDetailView(generics.RetrieveUpdateDestroyAPIView):
         except ValueError as exc:
             return Response(
                 {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except ProtectedError:
+            return Response(
+                {"detail": "This sale has an invoice and cannot be deleted."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

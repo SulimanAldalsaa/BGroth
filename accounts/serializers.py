@@ -16,6 +16,38 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+# PROFILE UPDATE (FR-2)
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    """PATCH /api/auth/me/: only first_name/last_name are editable.
+
+    Everything else the User model has (email, id, is_active, is_staff,
+    is_email_verified, date_joined, updated_at) is rejected explicitly with a
+    400, the same convention SaleUpdateSerializer/DebtUpdateSerializer already
+    use for their own not-editable fields, rather than silently ignoring it.
+    """
+
+    NOT_EDITABLE_FIELDS = (
+        "email", "id", "is_active", "is_staff", "is_email_verified",
+        "date_joined", "updated_at", "password", "full_name",
+    )
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name"]
+
+    def validate(self, attrs):
+        rejected = {
+            field: "This field cannot be edited."
+            for field in self.NOT_EDITABLE_FIELDS
+            if field in self.initial_data
+        }
+
+        if rejected:
+            raise serializers.ValidationError(rejected)
+
+        return attrs
+
+
 # REGISTER
 class RegisterSerializer(serializers.ModelSerializer):
     """
